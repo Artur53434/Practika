@@ -146,11 +146,11 @@ def analyze_text():
 
 #Ссылочка на сайт
 def open_website(event):
-    webbrowser.open_new("https://github.com/профиль")
+    webbrowser.open_new("https://artur53434.github.io/Practika/")
 
 #Оформление и запуск
 root = tk.Tk()
-root.title("Детектор сгенерированного текста (Кейс 5)")
+root.title("Детектор сгенерированного текста")
 root.geometry("650x730")
 root.configure(bg="#f4f5f7")
 
