@@ -189,7 +189,7 @@
         </div>
 
         <div class="verdict" id="verdictLabel">Похоже на: ...</div>
-        <div class="model-attribution" id="modelLabel">🤖 Вероятная модель: GPT-4</div>
+        <div class="model-attribution" id="modelLabel">Вероятная модель: GPT-4</div>
         
         <div class="metrics" id="metricsLabel">
             Метрики модели -> F1: -- | ROC-AUC: --
@@ -258,7 +258,7 @@
         //Обновление метрик
         const f1 = (0.8 + Math.random() * 0.19).toFixed(2);
         const rocAuc = (0.85 + Math.random() * 0.14).toFixed(2);
-        document.getElementById('metricsLabel').innerText = `Показатели (на валидации) -> F1: ${f1} | ROC-AUC: ${rocAuc}`;
+        document.getElementById('metricsLabel').innerText = `Показатели -> F1: ${f1} | ROC-AUC: ${rocAuc}`;
     }
 </script>
 
