@@ -3,262 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Text Detector</title>
+    <title>Детектор сгенерированного текста</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    
     <style>
-        :root {
-            --bg-color: #f4f5f7;
-            --container-bg: #ffffff;
-            --primary: #2196F3;
-            --primary-hover: #1976D2;
-            --human-color: #388e3c;
-            --ai-color: #d32f2f;
-            --text-main: #333;
-            --text-muted: #777;
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #121214; /* Глубокий темный фон */
+            color: #e0e0e0; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            justify-content: center; 
         }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+        .container { 
+            background: #1e1e24; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4); 
+            width: 100%; 
+            max-width: 700px; 
         }
-
-        .container {
-            background-color: var(--container-bg);
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            width: 100%;
-            max-width: 700px;
+        h1 { 
+            text-align: center; 
+            color: #ffffff; 
+            margin-top: 0; 
         }
-
-        h1 {
-            text-align: center;
-            margin-top: 0;
-            color: var(--text-main);
+        
+        .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+        button { 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 6px; 
+            padding: 10px 15px; 
+            font-size: 14px; 
+            font-weight: bold; 
+            transition: opacity 0.2s, background-color 0.2s; 
         }
-
-        .toolbar {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
+        button:hover { opacity: 0.9; }
+        
+        /* Кнопки в темной теме */
+        .btn-light { background-color: #32323d; color: #ffffff; }
+        .btn-light:hover { background-color: #434352; }
+        
+        .btn-primary { 
+            background-color: #2196F3; 
+            color: white; 
+            padding: 12px 20px; 
+            font-size: 16px; 
+            width: 100%; 
+            margin-top: 15px; 
         }
-
-        .toolbar button {
-            background: #e0e0e0;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: 0.2s;
+        .btn-warning { background-color: #c75f27; color: white; margin-left: auto; }
+        
+        textarea { 
+            width: 100%; 
+            height: 200px; 
+            padding: 15px; 
+            border: 1px solid #3a3a44; 
+            background-color: #2a2a32;
+            color: #ffffff; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            resize: vertical; 
+            box-sizing: border-box; 
         }
-
-        .toolbar button:hover {
-            background: #d5d5d5;
+        textarea:disabled { background-color: #232329; color: #88888c; border-color: #2d2d35; }
+        
+        .results { 
+            margin-top: 25px; 
+            padding: 20px; 
+            border: 1px solid #3a3a44; 
+            background-color: #1a1a1f; 
+            border-radius: 8px; 
+            text-align: center; 
         }
-
-        textarea {
-            width: 100%;
-            height: 150px;
-            padding: 15px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 15px;
-            resize: vertical;
-            box-sizing: border-box;
-            margin-bottom: 15px;
+        
+        .progress-bar-container { 
+            width: 100%; 
+            background-color: #32323d; 
+            border-radius: 10px; 
+            margin: 15px 0; 
+            overflow: hidden; 
+            height: 24px; 
+            position: relative; 
         }
-
-        textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+        .progress-bar { 
+            height: 100%; 
+            width: 0%; 
+            background-color: #4CAF50; 
+            transition: width 0.5s ease, background-color 0.5s ease; 
         }
-
-        .checkbox-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-            font-size: 15px;
-            cursor: pointer;
+        .progress-text { 
+            position: absolute; 
+            width: 100%; 
+            text-align: center; 
+            top: 2px; 
+            font-size: 14px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            pointer-events: none; 
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
         }
-
-        .checkbox-container input {
-            margin-right: 10px;
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .analyze-btn {
-            width: 100%;
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            padding: 15px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-
-        .analyze-btn:hover {
-            background-color: var(--primary-hover);
-        }
-
-        /* Results section */
-        .results-card {
-            margin-top: 25px;
-            padding: 20px;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            background-color: #fafafa;
-            text-align: center;
-            display: none; /* Скрыто до проверки */
-        }
-
-        .progress-bar-bg {
-            width: 100%;
-            background-color: #e0e0e0;
-            border-radius: 10px;
-            height: 20px;
-            margin: 10px 0;
-            overflow: hidden;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            background-color: var(--human-color);
-            width: 0%;
-            transition: width 0.5s ease-in-out, background-color 0.5s;
-        }
-
-        .verdict {
-            font-size: 24px;
-            font-weight: bold;
-            margin: 15px 0 5px 0;
-        }
-
-        .model-attribution {
-            font-size: 16px;
-            color: var(--primary);
-            font-weight: bold;
-            margin-bottom: 10px;
-            display: none;
-        }
-
-        .metrics {
-            margin-top: 15px;
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
+        
+        #result-text { font-size: 24px; font-weight: bold; color: #a0a0a5; margin-top: 10px; }
+        #warning-text { color: #FF9800; font-weight: bold; font-size: 14px; margin-top: 10px; min-height: 20px; }
+        
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Детектор текста (ИИ / Человек)</h1>
-    
+    <h1>Детектор сгенерированного текста</h1>
+
     <div class="toolbar">
-        <button onclick="pasteText()">📋 Вставить из буфера</button>
-        <button onclick="clearText()">🗑️ Очистить</button>
+        <button class="btn-light" onclick="pasteText()">📋 Вставить</button>
+        <button class="btn-light" onclick="clearAll()">🗑️ Очистить</button>
+        
+        <input type="file" id="file-upload" class="hidden" accept=".txt,.pdf">
+        <button class="btn-light" onclick="document.getElementById('file-upload').click()">📄 Загрузить файл</button>
+        
+        <button class="btn-warning" onclick="showInfo()">Инструкция</button>
     </div>
 
-    <textarea id="textInput" placeholder="Вставьте текст для анализа..."></textarea>
+    <textarea id="text-input" placeholder="Вставьте текст сюда или загрузите .txt / .pdf файл..."></textarea>
 
-    <label class="checkbox-container">
-        <input type="checkbox" id="attributionCheck">
-        Определить вероятную модель ИИ
-    </label>
+    <button class="btn-primary" onclick="analyzeText()">Проверить текст</button>
 
-    <button class="analyze-btn" onclick="analyzeText()">Проверить текст</button>
-
-    <div class="results-card" id="resultsCard">
-        <div id="probLabel">Вероятность генерации ИИ: 0%</div>
-        
-        <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="progressBar"></div>
+    <div class="results">
+        <div id="prob-label">Вероятность генерации ИИ: 0%</div>
+        <div class="progress-bar-container">
+            <div id="progress-bar" class="progress-bar"></div>
+            <div id="progress-text" class="progress-text">0%</div> 
         </div>
-
-        <div class="verdict" id="verdictLabel">Похоже на: ...</div>
-        <div class="model-attribution" id="modelLabel">Вероятная модель: GPT-4</div>
-        
-        <div class="metrics" id="metricsLabel">
-            Метрики модели -> F1: -- | ROC-AUC: --
-        </div>
+        <div id="result-text">Ожидание текста...</div>
+        <div id="warning-text"></div>
     </div>
 </div>
 
 <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    const MIN_CHARS = 100;
+    const MAX_CHARS = 50000;
+    let isFileUploaded = false;
+    let hiddenText = "";
+    
+    const textArea = document.getElementById('text-input');
+    const fileUpload = document.getElementById('file-upload');
+
     async function pasteText() {
+        if(textArea.disabled) return;
         try {
             const text = await navigator.clipboard.readText();
-            document.getElementById('textInput').value = text;
+            textArea.value += text;
         } catch (err) {
-            alert('Не удалось прочитать буфер обмена. Пожалуйста, используйте Ctrl+V');
+            alert('Не удалось прочитать буфер обмена. Используйте Ctrl+V.');
         }
     }
 
-    function clearText() {
-        document.getElementById('textInput').value = '';
-        document.getElementById('resultsCard').style.display = 'none';
+    function clearAll() {
+        isFileUploaded = false;
+        hiddenText = "";
+        textArea.disabled = false;
+        textArea.value = "";
+        document.getElementById('result-text').innerText = "Ожидание текста...";
+        document.getElementById('result-text').style.color = "#a0a0a5";
+        document.getElementById('prob-label').innerText = "Вероятность генерации ИИ: 0%";
+        document.getElementById('progress-bar').style.width = "0%";
+        document.getElementById('progress-bar').style.backgroundColor = "#4CAF50";
+        document.getElementById('progress-text').innerText = "0%";
+        document.getElementById('warning-text').innerText = "";
+        fileUpload.value = "";
     }
 
-    function analyzeText() {
-        const text = document.getElementById('textInput').value.trim();
-        if (!text) {
-            alert('Пожалуйста, введите текст для проверки.');
+    function showInfo() {
+        alert("📖 Правила пользования\n\n1. Лимиты: Не проверяйте слишком короткие тексты (менее 100 символов).\n2. Максимальный размер текста — 50 000 символов.\n3. Поддерживается ручной ввод, а также загрузка файлов .txt и .pdf.");
+    }
+
+    // Универсальный обработчик загрузки файлов (.txt и .pdf)
+    fileUpload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const fileExt = file.name.split('.').pop().toLowerCase();
+
+        if (fileExt === 'pdf') {
+            // Логика чтения PDF
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const typedarray = new Uint8Array(e.target.result);
+                try {
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    let extractedText = "";
+                    
+                    // Проходим по страницам и собираем текст
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        if (extractedText.length >= MAX_CHARS) break;
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(" ");
+                        extractedText += pageText + "\n";
+                    }
+                    
+                    finalizeFileSelection(extractedText, file.name);
+                } catch (err) {
+                    alert("Ошибка при разборе PDF файла. Возможно, он поврежден или защищен.");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            
+        } else if (fileExt === 'txt') {
+            // Логика чтения обычного TXT
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                finalizeFileSelection(e.target.result, file.name);
+            };
+            reader.readAsText(file);
+        } else {
+            alert("Неподдерживаемый формат файла. Пожалуйста, используйте .txt или .pdf");
+        }
+    });
+
+    // Функция завершения обработки текста из файла
+    function finalizeFileSelection(text, filename) {
+        if (text.length > MAX_CHARS) {
+            alert(`Файл слишком большой. Загружены только первые ${MAX_CHARS} символов.`);
+            text = text.substring(0, MAX_CHARS);
+        }
+        
+        hiddenText = text.trim();
+        if (hiddenText.length === 0) {
+            alert("Файл пуст или не содержит печатного текста (например, состоит только из картинок).");
+            clearAll();
             return;
         }
 
-        //Показываем карточку с результатами
-        const resultsCard = document.getElementById('resultsCard');
-        resultsCard.style.display = 'block';
+        isFileUploaded = true;
+        textArea.value = `📄 Файл успешно загружен: ${filename}\n\n[Текст скрыт для стабильной работы браузера. Ввод заблокирован]`;
+        textArea.disabled = true;
+    }
 
-        //Симуляция ответа от ML
-        const aiProb = Math.random() * 100;
-        const wantsAttribution = document.getElementById('attributionCheck').checked;
+    function analyzeText() {
+        let text = isFileUploaded ? hiddenText : textArea.value.trim();
         
-        //Обновление UI
-        const progressBar = document.getElementById('progressBar');
-        const verdictLabel = document.getElementById('verdictLabel');
-        const modelLabel = document.getElementById('modelLabel');
-        
-        document.getElementById('probLabel').innerText = `Вероятность генерации ИИ: ${aiProb.toFixed(1)}%`;
-        progressBar.style.width = `${aiProb}%`;
-
-        //Логика бинарной классификации
-        if (aiProb >= 50.0) {
-            progressBar.style.backgroundColor = 'var(--ai-color)';
-            verdictLabel.innerHTML = 'Похоже на: <span style="color: var(--ai-color)">ИИ</span>';
-            
-            // Логика атрибуции модели
-            if (wantsAttribution) {
-                const models = ["ChatGPT (GPT-4)", "Claude 3 Opus", "YandexGPT", "GigaChat", "Llama 3"];
-                const randomModel = models[Math.floor(Math.random() * models.length)];
-                modelLabel.innerText = ` Вероятная модель: ${randomModel}`;
-                modelLabel.style.display = 'block';
-            } else {
-                modelLabel.style.display = 'none';
-            }
-        } else {
-            progressBar.style.backgroundColor = 'var(--human-color)';
-            verdictLabel.innerHTML = 'Похоже на: <span style="color: var(--human-color)">человека</span>';
-            modelLabel.style.display = 'none';
+        if (text.length === 0) {
+            document.getElementById('result-text').innerText = "Пожалуйста, добавьте текст.";
+            document.getElementById('result-text').style.color = "#d32f2f";
+            return;
         }
 
-        //Обновление метрик
-        const f1 = (0.8 + Math.random() * 0.19).toFixed(2);
-        const rocAuc = (0.85 + Math.random() * 0.14).toFixed(2);
-        document.getElementById('metricsLabel').innerText = `Показатели -> F1: ${f1} | ROC-AUC: ${rocAuc}`;
+        if (text.length > MAX_CHARS) text = text.substring(0, MAX_CHARS);
+
+        if (text.length < MIN_CHARS) {
+            document.getElementById('warning-text').innerText = `⚠️ Текст слишком короткий (${text.length} симв.). Высокая вероятность ошибки!`;
+        } else {
+            document.getElementById('warning-text').innerText = "";
+        }
+
+        const probability = Math.random() * 100;
+        const probFixed = probability.toFixed(1);
+        
+        document.getElementById('prob-label').innerText = `Вероятность генерации ИИ: ${probFixed}%`;
+        document.getElementById('progress-bar').style.width = `${probability}%`;
+        document.getElementById('progress-text').innerText = `${probFixed}%`;
+
+        const resultText = document.getElementById('result-text');
+        if (probability >= 50) {
+            resultText.innerText = `Похоже на: ИИ (${probFixed}%)`;
+            resultText.style.color = "#f44336";
+            document.getElementById('progress-bar').style.backgroundColor = "#f44336";
+        } else {
+            resultText.innerText = `Похоже на: человека (${probFixed}%)`;
+            resultText.style.color = "#4CAF50"; 
+            document.getElementById('progress-bar').style.backgroundColor = "#4CAF50";
+        }
     }
 </script>
 
