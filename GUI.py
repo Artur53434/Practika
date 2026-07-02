@@ -19,6 +19,13 @@ MIN_CHARS_WARNING = 100
 MAX_FILE_CHARS = 50000
 MAX_SIZE_BYTES = 1 * 1024 * 1024 * 1024  # 1 ГБ
 
+#Горячие клавиши и функции выделения
+def select_all_text(event=None):
+    """Выделение всего текста"""
+    text_area.tag_add(tk.SEL, "1.0", tk.END)
+    text_area.mark_set(tk.INSERT, "1.0")
+    text_area.see(tk.INSERT)
+    return 'break'
 
 class InstructionWindow(QDialog):
     def __init__(self, parent=None):
@@ -318,3 +325,4 @@ if __name__ == "__main__":
     window = AIDetectorApp()
     window.show()
     sys.exit(app.exec())
+root.mainloop()
