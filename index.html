@@ -6,7 +6,6 @@
     <title>Детектор текста</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
-        /* --- ПЕРЕМЕННЫЕ ЦВЕТОВ ДЛЯ ТЕМ --- */
         :root {
             --bg-color: #f4f5f7;
             --sidebar-bg: #ffffff;
@@ -76,7 +75,7 @@
         .nav-btn.active { background-color: var(--btn-active); color: var(--btn-active-text); }
         .sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
 
-        /* ОСНОВНОЙ КОНТЕНТ (Центрирование и компактность) */
+        /* Основной контент */
         .main-content {
             flex: 1;
             padding: 40px;
@@ -90,7 +89,7 @@
         /* Ограничиваем ширину контейнера страниц */
         .page-container {
             width: 100%;
-            max-width: 850px; /* Делаем интерфейс компактным и удобным */
+            max-width: 850px;
         }
 
         .page { display: none; flex-direction: column; gap: 15px; }
