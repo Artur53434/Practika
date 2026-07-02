@@ -20,7 +20,7 @@ is_file_uploaded = False
 hidden_file_text = ""
 current_report_data = ""    # Хранит текст отчета для сохранения
 
-#Горяие клавиши и функции выделения
+#Горячие клавиши и функции выделения
 def select_all_text(event=None):
     """Выделение всего текста"""
     text_area.tag_add(tk.SEL, "1.0", tk.END)
@@ -296,7 +296,7 @@ scrollbar = ttk.Scrollbar(text_frame, command=text_area.yview)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 text_area.config(yscrollcommand=scrollbar.set)
 
-#галочка атрибуции модели
+# Галочка атрибуции модели
 check_model_var = tk.BooleanVar()
 check_model_btn = tk.Checkbutton(root, text="Определить вероятную модель ИИ", 
                                  variable=check_model_var, bg="#f4f5f7", font=("Segoe UI", 10), activebackground="#f4f5f7")
