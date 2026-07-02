@@ -2,22 +2,25 @@ import sys
 import os
 import random
 import datetime
+import json
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QTextEdit, QLabel,
                                QProgressBar, QMessageBox, QFileDialog, QStackedWidget,
                                QTableWidget, QTableWidgetItem, QHeaderView)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QFont, QDesktopServices
+
+#Константы
+MIN_CHARS_WARNING = 100
+MAX_FILE_CHARS = 50000
+MAX_SIZE_BYTES = 1 * 1024 * 1024 * 1024
+WEBSITE_URL = "https://artur53434.github.io/Practika/" 
+HISTORY_FILE = "history.json" # Файл для сохранения истории
 
 try:
     import pypdf
 except ImportError:
     pypdf = None
-
-#Константы
-MIN_CHARS_WARNING = 100
-MAX_FILE_CHARS = 50000
-MAX_SIZE_BYTES = 1 * 1024 * 1024 * 1024  # 1 ГБ
 
 #Стили(QSS)
 LIGHT_THEME = """
@@ -59,28 +62,25 @@ QHeaderView::section { background-color: #2a2a32; padding: 4px; border: 1px soli
 QTableWidget QTableCornerButton::section { background-color: #2a2a32; }
 """
 
-#Custom Поле(текст)
 class PlainTextEdit(QTextEdit):
     def insertFromMimeData(self, source):
         if source.hasText():
             self.insertPlainText(source.text())
 
-#Глав. окно
 class AIDetectorApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Детектор текста")
-        self.resize(1000, 700)
+        self.resize(1100, 750)
         self.is_dark_theme = True
         
-        # Данные
         self.is_file_uploaded = False
         self.hidden_file_text = ""
         self.current_report_data = ""
-        self.history_data = [] # Список для хранения истории проверок
         
         self.init_ui()
         self.apply_theme()
+        self.load_history()
 
     def init_ui(self):
         central_widget = QWidget()
@@ -96,14 +96,12 @@ class AIDetectorApp(QMainWindow):
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(0, 20, 0, 20)
 
-        # Профиль пользователя
         user_lbl = QLabel("👤 Пользователь")
         user_lbl.setFont(QFont("Segoe UI", 16, QFont.Bold))
         user_lbl.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(user_lbl)
         sidebar_layout.addSpacing(30)
 
-        # Кнопки навигации
         self.btn_nav_check = QPushButton("📝 Проверка текста")
         self.btn_nav_check.setCheckable(True)
         self.btn_nav_check.setChecked(True)
@@ -122,7 +120,10 @@ class AIDetectorApp(QMainWindow):
 
         sidebar_layout.addStretch()
 
-        # Кнопка темы
+        self.btn_open_web = QPushButton("🌐 Перейти на сайт")
+        self.btn_open_web.clicked.connect(self.open_website)
+        sidebar_layout.addWidget(self.btn_open_web)
+
         self.btn_theme = QPushButton("☀️ Светлая тема")
         self.btn_theme.clicked.connect(self.toggle_theme)
         sidebar_layout.addWidget(self.btn_theme)
@@ -133,7 +134,6 @@ class AIDetectorApp(QMainWindow):
         self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
 
-        #Создание страницы
         self.page_check = self.create_check_page()
         self.page_history = self.create_history_page()
         self.page_info = self.create_info_page()
@@ -142,14 +142,15 @@ class AIDetectorApp(QMainWindow):
         self.stacked_widget.addWidget(self.page_history)
         self.stacked_widget.addWidget(self.page_info)
 
-    #Проверка текста
+    def open_website(self):
+        QDesktopServices.openUrl(QUrl(WEBSITE_URL))
+
     def create_check_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(50, 40, 50, 40) 
         layout.setSpacing(15)
 
-        # Верхняя панель "загрузка файлов"
         top_layout = QHBoxLayout()
         btn_upload = QPushButton("📄 Загрузить файлы")
         btn_upload.setProperty("class", "secondary-btn")
@@ -168,12 +169,10 @@ class AIDetectorApp(QMainWindow):
         top_layout.addWidget(btn_clear)
         layout.addLayout(top_layout)
 
-        # Текстовое поле
         self.text_area = PlainTextEdit()
         self.text_area.setPlaceholderText("Ввод текста...")
         layout.addWidget(self.text_area)
 
-        # Кнопки действий
         action_layout = QHBoxLayout()
         btn_analyze = QPushButton("Проверить текст")
         btn_analyze.setProperty("class", "action-btn")
@@ -189,7 +188,6 @@ class AIDetectorApp(QMainWindow):
         action_layout.addWidget(btn_save, 1)
         layout.addLayout(action_layout)
 
-        # Блок результатов
         self.result_box = QWidget()
         self.result_box.setObjectName("ResultBox")
         result_layout = QVBoxLayout(self.result_box)
@@ -202,7 +200,7 @@ class AIDetectorApp(QMainWindow):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setAlignment(Qt.AlignCenter)
-        self.progress_bar.setFormat("%p%") # Отображение процентов внутри
+        self.progress_bar.setFormat("%p%")
         
         self.warning_label = QLabel("")
         self.warning_label.setStyleSheet("color: #FF9800; font-weight: bold;")
@@ -215,22 +213,20 @@ class AIDetectorApp(QMainWindow):
         layout.addWidget(self.result_box)
         return page
 
-    #История проверок
     def create_history_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(50, 40, 50, 40)
         
         title = QLabel("🗄️ История проверок")
         title.setFont(QFont("Segoe UI", 16, QFont.Bold))
         layout.addWidget(title)
 
-        # Фильтры
         filter_layout = QHBoxLayout()
         btn_f1 = QPushButton("За час")
         btn_f2 = QPushButton("Сегодня")
         btn_f3 = QPushButton("Неделя")
-        btn_export = QPushButton("💾 Сохранить отчёт")
+        btn_export = QPushButton("💾 Очистить историю")
         
         for btn in [btn_f1, btn_f2, btn_f3, btn_export]:
             btn.setProperty("class", "secondary-btn")
@@ -239,36 +235,35 @@ class AIDetectorApp(QMainWindow):
         filter_layout.addWidget(btn_f2)
         filter_layout.addWidget(btn_f3)
         filter_layout.addStretch()
+        
+        btn_export.clicked.connect(self.clear_history_data)
         filter_layout.addWidget(btn_export)
+        
         layout.addLayout(filter_layout)
 
-        # Таблица
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Время", "Символов", "Вердикт", "ИИ (%)"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setSortingEnabled(True) # Включаем сортировку по клику на заголовок
+        self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
-        
         return page
 
-    #Инструкция
     def create_info_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(50, 40, 50, 40)
         
         title = QLabel("⚙️ Инструкция")
         title.setFont(QFont("Segoe UI", 16, QFont.Bold))
         layout.addWidget(title)
         
         rules = (
-            "AI Text Detector\n\n"
+            "AI Text Detector:\n\n"
             "1. Чистая вставка: При копировании текста (Ctrl+V) программа автоматически\n"
             "   очищает его от лишних стилей, жирного шрифта, картинок и 'кривых' символов.\n\n"
             f"2. ⚠️ Лимиты: Не проверяйте слишком короткие тексты (менее {MIN_CHARS_WARNING} символов).\n"
             f"   Максимальный лимит для загрузки файлов: {MAX_FILE_CHARS} символов (или 1 ГБ веса).\n\n"
-            "3. История: Все проверки за текущую сессию сохраняются во вкладке 'История'.\n"
-            "   Вы можете отсортировать их, кликнув по заголовку столбца таблицы.\n\n"
+            "3. История: Все проверки автоматически сохраняются и остаются после закрытия программы.\n\n"
             "4. Темы: Используйте кнопку в левом нижнем углу для переключения оформления.\n\n"
 
             "Разработчики:\n" 
@@ -284,10 +279,8 @@ class AIDetectorApp(QMainWindow):
         text_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         layout.addWidget(text_label)
         layout.addStretch()
-        
         return page
 
-    #Логика интерфейса и тем
     def switch_page(self, index):
         for i, btn in enumerate(self.nav_buttons):
             btn.setChecked(i == index)
@@ -305,7 +298,6 @@ class AIDetectorApp(QMainWindow):
             self.setStyleSheet(LIGHT_THEME)
             self.btn_theme.setText("🌙 Темная тема")
 
-    #Логика работы детектора
     def clear_all(self):
         self.is_file_uploaded = False
         self.hidden_file_text = ""
@@ -319,116 +311,111 @@ class AIDetectorApp(QMainWindow):
         self.warning_label.setText("")
 
     def upload_file(self):
-        filepath, _ = QFileDialog.getOpenFileName(self, "Выберите файл", "", "Текстовые и PDF файлы (*.txt *.pdf);;Текстовые файлы (*.txt);;PDF файлы (*.pdf)")
+        filepath, _ = QFileDialog.getOpenFileName(self, "Выберите файл", "", "Текстовые и PDF файлы (*.txt *.pdf)")
         if not filepath: return
-
-        file_size_bytes = os.path.getsize(filepath)
-        if file_size_bytes > MAX_SIZE_BYTES:
-            QMessageBox.critical(self, "Ошибка", "Файл слишком большой. Максимальный размер — 1 ГБ.")
+        if os.path.getsize(filepath) > MAX_SIZE_BYTES:
+            QMessageBox.critical(self, "Ошибка", "Файл крупнее 1 ГБ.")
             return
-
         try:
             ext = os.path.splitext(filepath)[1].lower()
             filename = os.path.basename(filepath)
             extracted_text = ""
-
             if ext == '.txt':
                 with open(filepath, 'r', encoding='utf-8') as file:
                     extracted_text = file.read(MAX_FILE_CHARS + 1)
-            elif ext == '.pdf':
-                if pypdf is None:
-                    QMessageBox.critical(self, "Ошибка", "Нужна библиотека pypdf (pip install pypdf)")
-                    return
+            elif ext == '.pdf' and pypdf:
                 with open(filepath, 'rb') as file:
                     reader = pypdf.PdfReader(file)
                     for page in reader.pages:
                         if len(extracted_text) >= MAX_FILE_CHARS: break
-                        text = page.extract_text()
-                        if text: extracted_text += text + "\n"
-
+                        t = page.extract_text()
+                        if t: extracted_text += t + "\n"
             extracted_text = extracted_text[:MAX_FILE_CHARS].strip()
-            if not extracted_text:
-                QMessageBox.warning(self, "Внимание", "Не удалось извлечь текст.")
-                return
-
+            if not extracted_text: return
             self.hidden_file_text = extracted_text
             self.is_file_uploaded = True
             self.lbl_file_info.setText(f"Загружен: {filename}")
-            
-            self.text_area.setReadOnly(False)
             self.text_area.clear()
-            self.text_area.setText(f"[Текст файла скрыт для стабильности. Ввод заблокирован]")
+            self.text_area.setText(f"[Текст файла скрыт]")
             self.text_area.setReadOnly(True)
-                
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось прочитать файл:\n{str(e)}")
+            QMessageBox.critical(self, "Ошибка", str(e))
 
     def analyze_text(self):
         target_text = self.hidden_file_text if self.is_file_uploaded else self.text_area.toPlainText().strip()
         text_length = len(target_text)
-        
-        if text_length == 0:
-            self.prob_label.setText("Пожалуйста, добавьте текст.")
-            self.warning_label.setText("")
-            return
-
+        if text_length == 0: return
         if text_length < MIN_CHARS_WARNING:
-            self.warning_label.setText(f"⚠️ Текст слишком короткий ({text_length} симв.). Возможна ошибка.")
+            self.warning_label.setText(f"⚠️Текст слишком короткий ({text_length} симв.).")
         else:
             self.warning_label.setText("")
-
-        # Заглушка ML модели
+            
         ai_probability = random.uniform(0, 100)
         self.progress_bar.setValue(int(ai_probability))
+        verdict = "ИИ" if ai_probability >= 50.0 else "Человек"
+        color = "#f44336" if ai_probability >= 50.0 else "#4CAF50"
         
-        if ai_probability >= 50.0:
-            verdict = "ИИ"
-            color = "#f44336" if self.is_dark_theme else "#d32f2f"
-        else:
-            verdict = "Человек"
-            color = "#4CAF50" if self.is_dark_theme else "#388e3c"
-            
         self.prob_label.setText(f"Похоже на: {verdict} ({ai_probability:.1f}%)")
         self.prob_label.setStyleSheet(f"color: {color};")
+        self.progress_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
         
-        # Меняем цвет полосы прогресса
-        self.progress_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; border-radius: 5px; }}")
+        time_str = datetime.datetime.now().strftime("%d.%m %H:%M:%S")
+        self.current_report_data = f"Вердикт: {verdict}\nВероятность: {ai_probability:.1f}%\nТекст:\n{target_text}"
         
-        # Данные для отчета
-        time_str = datetime.datetime.now().strftime("%H:%M:%S")
-        self.current_report_data = f"Вердикт: {verdict}\nВероятность ИИ: {ai_probability:.1f}%\nТекст:\n{target_text}"
-        
-        # Добавление в историю
         self.add_to_history(time_str, text_length, verdict, ai_probability)
+        self.save_history_to_file(time_str, text_length, verdict, ai_probability)
 
+    # Работа с историей в UI
     def add_to_history(self, time_str, length, verdict, prob):
+        self.table.setSortingEnabled(False)
         row = self.table.rowCount()
         self.table.insertRow(row)
-        
-        item_time = QTableWidgetItem(time_str)
+        self.table.setItem(row, 0, QTableWidgetItem(time_str))
         
         item_len = QTableWidgetItem()
-        item_len.setData(Qt.EditRole, length)
-        
-        item_verd = QTableWidgetItem(verdict)
-        
-        item_prob = QTableWidgetItem()
-        item_prob.setData(Qt.EditRole, round(prob, 1))
-
-        self.table.setItem(row, 0, item_time)
+        item_len.setData(Qt.EditRole, int(length))
         self.table.setItem(row, 1, item_len)
-        self.table.setItem(row, 2, item_verd)
-        self.table.setItem(row, 3, item_prob)
+        
+        self.table.setItem(row, 2, QTableWidgetItem(verdict))
+        
+        item_pr = QTableWidgetItem()
+        item_pr.setData(Qt.EditRole, round(float(prob), 1))
+        self.table.setItem(row, 3, item_pr)
+        self.table.setSortingEnabled(True)
+
+    # Сохранение и загрузка истории из JSON
+    def save_history_to_file(self, time_str, length, verdict, prob):
+        data = []
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                try: data = json.load(f)
+                except: pass
+        data.append({"time": time_str, "length": length, "verdict": verdict, "prob": prob})
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+    def load_history(self):
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                    for item in data:
+                        self.add_to_history(item['time'], item['length'], item['verdict'], item['prob'])
+                except:
+                    pass
+
+    def clear_history_data(self):
+        reply = QMessageBox.question(self, 'Очистка', 'Удалить всю историю проверок?', QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.table.setRowCount(0)
+            if os.path.exists(HISTORY_FILE):
+                os.remove(HISTORY_FILE)
 
     def save_result(self):
-        if not self.current_report_data:
-            QMessageBox.information(self, "Нет данных", "Сначала проведите анализ текста.")
-            return
+        if not self.current_report_data: return
         filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить", "Report.txt", "Текстовые файлы (*.txt)")
         if filepath:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(self.current_report_data)
-            QMessageBox.information(self, "Успех", "Сохранено!")
+            with open(filepath, 'w', encoding='utf-8') as f: f.write(self.current_report_data)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
