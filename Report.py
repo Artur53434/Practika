@@ -13,48 +13,84 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from datetime import datetime
 
+class Report:
+    def __init__(self):
+        # Элементы pdf файла
+        self.elements = []
+        # Данные для отчёта
+        #self.data = []
 
-# ---------- РЕГИСТРАЦИЯ ШРИФТА (для русского текста) ----------
-pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
+        # ---------- РЕГИСТРАЦИЯ ШРИФТА (для русского текста) ----------
+        pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
 
-styles = getSampleStyleSheet()
+        styles = getSampleStyleSheet()
 
-custom_style = ParagraphStyle(
-    name='Custom',
-    parent=styles['Normal'],
-    fontName='DejaVu',
-    fontSize=12,
-)
+        # Основной стиль документа
+        self.custom_style = ParagraphStyle(
+            name='Custom',
+            parent=styles['Normal'],
+            fontName='DejaVu',
+            fontSize=12,
+        )
 
-title_style = ParagraphStyle(
-    name='TitleCustom',
-    parent=styles['Heading1'],
-    fontName='DejaVu',
-    fontSize=18,
-    spaceAfter=20
-)
+        # Стиль для заголовков документа
+        self.title_style = ParagraphStyle(
+            name='TitleCustom',
+            parent=styles['Heading1'],
+            fontName='DejaVu',
+            fontSize=18,
+            spaceAfter=20
+        )
 
+        # ---------- СОЗДАНИЕ ДОКУМЕНТА ----------
+        self.doc = SimpleDocTemplate(
+            "report.pdf",
+            rightMargin=40,
+            leftMargin=40,
+            topMargin=40,
+            bottomMargin=40
+        )
+        pass
+    # ---------- ЗАГОЛОВОК ----------
+    def add_title(self, title : str):
+        self.elements.append(Paragraph(title, self.title_style))
+        self.elements.append(Paragraph(
+            f"Дата создания: {datetime.now().strftime('%d.%m.%Y')}",
+            self.custom_style
+        ))
+        self.elements.append(Spacer(1, 0.5 * inch))
+        pass
+    def create_table(self, table_data):
+        table = Table(table_data, hAlign="LEFT")
 
-# ---------- СОЗДАНИЕ ДОКУМЕНТА ----------
-doc = SimpleDocTemplate(
-    "report.pdf",
-    rightMargin=40,
-    leftMargin=40,
-    topMargin=40,
-    bottomMargin=40
-)
+        table.setStyle(TableStyle([
+            # Цвет фона заголовка
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
 
-elements = []
+            # Выравнивание
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
 
-# ---------- ЗАГОЛОВОК ----------
-elements.append(Paragraph("Отчёт по продажам", title_style))
-elements.append(Paragraph(
-    f"Дата создания: {datetime.now().strftime('%d.%m.%Y')}",
-    custom_style
-))
-elements.append(Spacer(1, 0.5 * inch))
+            # Шрифт
+            ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
 
+            # Сетка
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ]))
+        return table
+    pass
+    # ---------- Добавить одну запись отчёта ----------
+    def add_record(self):
 
+        pass
+    # ---------- Сборка отчёта ----------
+    def build(self):
+        self.doc.build(self.elements)
+        print("Отчёт создан\n")
+        pass
+
+    pass
 # ---------- ДАННЫЕ ----------
 data = [
     ["№", "Товар", "Количество", "Цена", "Сумма"],
@@ -62,12 +98,6 @@ data = [
     [2, "Мышь", 5, 1500, 7500],
     [3, "Клавиатура", 3, 3000, 9000],
 ]
-
-# Подсчёт итогов
-total_sum = sum(row[4] for row in data[1:])
-data.append(["", "", "", "ИТОГО:", total_sum])
-
-
 # ---------- СОЗДАНИЕ ТАБЛИЦЫ ----------
 table = Table(data, hAlign="LEFT")
 
@@ -90,11 +120,3 @@ table.setStyle(TableStyle([
     ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
     ('SPAN', (0, -1), (2, -1)),  # объединяем ячейки
 ]))
-
-elements.append(table)
-
-
-# ---------- СБОРКА PDF ----------
-doc.build(elements)
-
-print("PDF-отчёт создан: report.pdf")
