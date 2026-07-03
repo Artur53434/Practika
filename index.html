@@ -3,145 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Детектор сгенерированного текста</title>
-    
+    <title>Детектор текста</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: #121214; /* Глубокий темный фон */
-            color: #e0e0e0; 
-            margin: 0; 
-            padding: 20px; 
-            display: flex; 
-            justify-content: center; 
+        :root {
+            --bg-color: #f4f5f7;
+            --sidebar-bg: #ffffff;
+            --sidebar-border: #d5d5d5;
+            --text-color: #333333;
+            --btn-hover: #e0e0e0;
+            --btn-active: #2196F3;
+            --btn-active-text: #ffffff;
+            --input-bg: #ffffff;
+            --input-border: #cccccc;
+            --result-bg: #ffffff;
+            --progress-bg: #e0e0e0;
+            --table-header: #f4f5f7;
+            --table-border: #eee;
         }
-        .container { 
-            background: #1e1e24; 
-            padding: 30px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4); 
-            width: 100%; 
-            max-width: 700px; 
+
+        body.dark-mode {
+            --bg-color: #121214;
+            --sidebar-bg: #1e1e24;
+            --sidebar-border: #2a2a32;
+            --text-color: #e0e0e0;
+            --btn-hover: #2a2a32;
+            --btn-active: #2196F3;
+            --btn-active-text: #ffffff;
+            --input-bg: #2a2a32;
+            --input-border: #3a3a44;
+            --result-bg: #1a1a1f;
+            --progress-bg: #2a2a32;
+            --table-header: #2a2a32;
+            --table-border: #3a3a44;
         }
-        h1 { 
-            text-align: center; 
-            color: #ffffff; 
-            margin-top: 0; 
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+            overflow: hidden;
         }
+
+        /* Боковая панель */
+        .sidebar {
+            width: 260px;
+            min-width: 260px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--sidebar-border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            box-sizing: border-box;
+            transition: background-color 0.3s, border-color 0.3s;
+            z-index: 10;
+        }
+
+        .user-profile { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 30px; }
+
+        .nav-btn {
+            text-align: left; padding: 12px 20px; font-size: 14px; font-weight: bold;
+            border: none; background: transparent; color: var(--text-color);
+            cursor: pointer; border-radius: 8px; margin: 2px 10px; transition: background-color 0.2s;
+        }
+        .nav-btn:hover { background-color: var(--btn-hover); }
+        .nav-btn.active { background-color: var(--btn-active); color: var(--btn-active-text); }
+        .sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
+
+        /* Основной контент */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center; /* Центрируем по горизонтали */
+            align-items: flex-start;
+        }
+
+        /* Ограничиваем ширину контейнера страниц */
+        .page-container {
+            width: 100%;
+            max-width: 850px;
+        }
+
+        .page { display: none; flex-direction: column; gap: 15px; }
+        .page.active { display: flex; }
+
+        h2 { margin-top: 0; font-size: 24px; }
+
+        /* Элементы управления */
+        .toolbar { display: flex; gap: 10px; align-items: center; }
+        .btn {
+            cursor: pointer; border: none; border-radius: 6px; padding: 10px 15px;
+            font-size: 14px; font-weight: bold; transition: opacity 0.2s;
+        }
+        .btn-secondary { background-color: var(--btn-hover); color: var(--text-color); }
+        .btn-primary { background-color: #2196F3; color: white; width: 100%; padding: 12px; font-size: 16px; margin-top: 10px; }
         
-        .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
-        button { 
-            cursor: pointer; 
-            border: none; 
-            border-radius: 6px; 
-            padding: 10px 15px; 
-            font-size: 14px; 
-            font-weight: bold; 
-            transition: opacity 0.2s, background-color 0.2s; 
+        .file-info { font-style: italic; color: #757575; font-size: 14px; }
+
+        /* Поле ввода */
+        textarea {
+            width: 100%; height: 300px; padding: 15px; border: 1px solid var(--input-border);
+            background-color: var(--input-bg); color: var(--text-color); border-radius: 8px;
+            font-size: 15px; resize: vertical; box-sizing: border-box;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
         }
-        button:hover { opacity: 0.9; }
-        
-        /* Кнопки в темной теме */
-        .btn-light { background-color: #32323d; color: #ffffff; }
-        .btn-light:hover { background-color: #434352; }
-        
-        .btn-primary { 
-            background-color: #2196F3; 
-            color: white; 
-            padding: 12px 20px; 
-            font-size: 16px; 
-            width: 100%; 
-            margin-top: 15px; 
+        textarea:disabled { opacity: 0.6; }
+
+        /* Результаты */
+        .results-box {
+            border: 1px solid var(--input-border); background-color: var(--result-bg);
+            border-radius: 8px; padding: 25px; text-align: center; margin-top: 10px;
         }
-        .btn-warning { background-color: #c75f27; color: white; margin-left: auto; }
+        #result-text { font-size: 22px; font-weight: bold; margin-bottom: 15px; color: #757575; }
         
-        textarea { 
-            width: 100%; 
-            height: 200px; 
-            padding: 15px; 
-            border: 1px solid #3a3a44; 
-            background-color: #2a2a32;
-            color: #ffffff; 
-            border-radius: 8px; 
-            font-size: 14px; 
-            resize: vertical; 
-            box-sizing: border-box; 
+        .progress-container {
+            width: 100%; background-color: var(--progress-bg); height: 28px;
+            border-radius: 6px; overflow: hidden; position: relative; margin-bottom: 10px;
         }
-        textarea:disabled { background-color: #232329; color: #88888c; border-color: #2d2d35; }
+        .progress-bar { width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.4s, background-color 0.4s; }
+        .progress-text { position: absolute; width: 100%; text-align: center; top: 4px; font-weight: bold; font-size: 15px; }
+
+        #warning-text { color: #FF9800; font-weight: bold; font-size: 14px; }
+
+        /* Таблица истории */
+        table { width: 100%; border-collapse: collapse; background: var(--input-bg); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 14px; border: 1px solid var(--table-border); text-align: left; }
+        th { background-color: var(--table-header); font-weight: bold; cursor: pointer; user-select: none; }
         
-        .results { 
-            margin-top: 25px; 
-            padding: 20px; 
-            border: 1px solid #3a3a44; 
-            background-color: #1a1a1f; 
-            border-radius: 8px; 
-            text-align: center; 
-        }
-        
-        .progress-bar-container { 
-            width: 100%; 
-            background-color: #32323d; 
-            border-radius: 10px; 
-            margin: 15px 0; 
-            overflow: hidden; 
-            height: 24px; 
-            position: relative; 
-        }
-        .progress-bar { 
-            height: 100%; 
-            width: 0%; 
-            background-color: #4CAF50; 
-            transition: width 0.5s ease, background-color 0.5s ease; 
-        }
-        .progress-text { 
-            position: absolute; 
-            width: 100%; 
-            text-align: center; 
-            top: 2px; 
-            font-size: 14px; 
-            font-weight: bold; 
-            color: #ffffff; 
-            pointer-events: none; 
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-        }
-        
-        #result-text { font-size: 24px; font-weight: bold; color: #a0a0a5; margin-top: 10px; }
-        #warning-text { color: #FF9800; font-weight: bold; font-size: 14px; margin-top: 10px; min-height: 20px; }
-        
-        .hidden { display: none; }
+        .info-text { font-size: 16px; line-height: 1.7; }
     </style>
 </head>
-<body>
+<body class="dark-mode">
 
-<div class="container">
-    <h1>Детектор сгенерированного текста</h1>
-
-    <div class="toolbar">
-        <button class="btn-light" onclick="pasteText()">📋 Вставить</button>
-        <button class="btn-light" onclick="clearAll()">🗑️ Очистить</button>
+    <div class="sidebar">
+        <div class="user-profile">👤 Пользователь</div>
+        <button class="nav-btn active" onclick="switchPage('page-check', this)">📝 Проверка текста</button>
+        <button class="nav-btn" onclick="switchPage('page-history', this)">🗄️ История проверок</button>
+        <button class="nav-btn" onclick="switchPage('page-info', this)">⚙️ Инструкция</button>
         
-        <input type="file" id="file-upload" class="hidden" accept=".txt,.pdf">
-        <button class="btn-light" onclick="document.getElementById('file-upload').click()">📄 Загрузить файл</button>
-        
-        <button class="btn-warning" onclick="showInfo()">Инструкция</button>
-    </div>
-
-    <textarea id="text-input" placeholder="Вставьте текст сюда или загрузите .txt / .pdf файл..."></textarea>
-
-    <button class="btn-primary" onclick="analyzeText()">Проверить текст</button>
-
-    <div class="results">
-        <div id="prob-label">Вероятность генерации ИИ: 0%</div>
-        <div class="progress-bar-container">
-            <div id="progress-bar" class="progress-bar"></div>
-            <div id="progress-text" class="progress-text">0%</div> 
+        <div class="sidebar-footer">
+            <button class="nav-btn" onclick="toggleTheme()" id="theme-btn">☀️ Светлая тема</button>
         </div>
-        <div id="result-text">Ожидание текста...</div>
-        <div id="warning-text"></div>
     </div>
-</div>
+
+    <div class="main-content">
+        <div class="page-container">
+            
+            <div id="page-check" class="page active">
+                <div class="toolbar">
+                    <button class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">📄 Загрузить файлы</button>
+                    <input type="file" id="file-upload" style="display:none" accept=".txt,.pdf">
+                    <span class="file-info" id="file-lbl">Файл не загружен</span>
+                    <button class="btn btn-secondary" style="margin-left:auto;" onclick="clearAll()">🗑️ Очистить всё</button>
+                </div>
+                
+                <textarea id="text-input" placeholder="Ввод текста... (Вставка Ctrl+V автоматически очищается от картинок и стилей)"></textarea>
+                
+                <div style="display: flex; gap: 15px;">
+                    <button class="btn btn-primary" style="flex: 2;" onclick="analyzeText()">Проверить текст</button>
+                    <button class="btn btn-secondary" style="flex: 1; margin-top: 10px;" onclick="saveReport()">💾 Сохранить результат</button>
+                </div>
+
+                <div class="results-box">
+                    <div id="result-text">Ожидание текста...</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="p-bar"></div>
+                        <div class="progress-text" id="p-text">0%</div>
+                    </div>
+                    <div id="warning-text"></div>
+                </div>
+            </div>
+
+            <div id="page-history" class="page">
+                <h2>🗄️ История проверок</h2>
+                <div class="toolbar" style="margin-bottom: 15px;">
+                    <button class="btn btn-secondary">За час</button>
+                    <button class="btn btn-secondary">Сегодня</button>
+                    <button class="btn btn-secondary">Неделя</button>
+                    <button class="btn btn-secondary" style="margin-left: auto;" onclick="clearHistory()">🗑️ Очистить историю</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">Время</th>
+                            <th onclick="sortTable(1)">Символов</th>
+                            <th onclick="sortTable(2)">Вердикт</th>
+                            <th onclick="sortTable(3)">ИИ (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body">
+                        </tbody>
+                </table>
+            </div>
+
+            <div id="page-info" class="page">
+                <h2>⚙️ Инструкция</h2>
+                <div class="info-text">
+                    <p>Добро пожаловать в AI Text Detector!</p>
+                    <p>1. <b>Чистая вставка:</b> Любой скопированный и вставленный через Ctrl+V текст автоматически освобождается от картинок (галочек), таблиц и HTML-стилей, предотвращая зависание системы.</p>
+                    <p>2. <b>Лимиты:</b> Порог информативности составляет 100 символов. Максимальный размер текста из файлов ограничен 50 000 символов.</p>
+                    <p>3. <b>Вкладка истории:</b> Все ваши проверки автоматически сохраняются в браузере (LocalStorage). Вы можете сортировать результаты кликом по заголовкам колонок.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
 
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
@@ -150,138 +224,157 @@
     const MAX_CHARS = 50000;
     let isFileUploaded = false;
     let hiddenText = "";
+    let lastReport = "";
     
+    // Инициализация истории из LocalStorage
+    let historyData = JSON.parse(localStorage.getItem('aiDetectorHistory')) || [];
+
     const textArea = document.getElementById('text-input');
     const fileUpload = document.getElementById('file-upload');
 
-    async function pasteText() {
-        if(textArea.disabled) return;
-        try {
-            const text = await navigator.clipboard.readText();
-            textArea.value += text;
-        } catch (err) {
-            alert('Не удалось прочитать буфер обмена. Используйте Ctrl+V.');
-        }
+    // Отрисовка истории при загрузке
+    document.addEventListener("DOMContentLoaded", renderHistory);
+
+    function switchPage(pageId, btn) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        btn.classList.add('active');
     }
+
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        document.getElementById('theme-btn').innerText = isDark ? "☀️ Светлая тема" : "🌙 Темная тема";
+    }
+
+    textArea.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+        const start = this.selectionStart;
+        this.value = this.value.substring(0, start) + text + this.value.substring(this.selectionEnd);
+        this.selectionStart = this.selectionEnd = start + text.length;
+    });
 
     function clearAll() {
-        isFileUploaded = false;
-        hiddenText = "";
-        textArea.disabled = false;
-        textArea.value = "";
-        document.getElementById('result-text').innerText = "Ожидание текста...";
-        document.getElementById('result-text').style.color = "#a0a0a5";
-        document.getElementById('prob-label').innerText = "Вероятность генерации ИИ: 0%";
-        document.getElementById('progress-bar').style.width = "0%";
-        document.getElementById('progress-bar').style.backgroundColor = "#4CAF50";
-        document.getElementById('progress-text').innerText = "0%";
-        document.getElementById('warning-text').innerText = "";
+        isFileUploaded = false; hiddenText = ""; lastReport = "";
         fileUpload.value = "";
+        document.getElementById('file-lbl').innerText = "Файл не загружен";
+        textArea.value = ""; textArea.disabled = false;
+        document.getElementById('result-text').innerText = "Ожидание текста...";
+        document.getElementById('result-text').style.color = "var(--text-color)";
+        document.getElementById('p-bar').style.width = "0%";
+        document.getElementById('p-text').innerText = "0%";
+        document.getElementById('warning-text').innerText = "";
     }
 
-    function showInfo() {
-        alert("📖 Правила пользования\n\n1. Лимиты: Не проверяйте слишком короткие тексты (менее 100 символов).\n2. Максимальный размер текста — 50 000 символов.\n3. Поддерживается ручной ввод, а также загрузка файлов .txt и .pdf.");
-    }
-
-    // Универсальный обработчик загрузки файлов (.txt и .pdf)
     fileUpload.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        const processText = (text) => {
+            hiddenText = text.substring(0, MAX_CHARS).trim();
+            if(!hiddenText) { clearAll(); return; }
+            isFileUploaded = true;
+            document.getElementById('file-lbl').innerText = `Загружен: ${file.name}`;
+            textArea.value = "[Текст файла скрыт]";
+            textArea.disabled = true;
+        };
 
-        const fileExt = file.name.split('.').pop().toLowerCase();
-
-        if (fileExt === 'pdf') {
-            // Логика чтения PDF
+        if (ext === 'pdf') {
             const reader = new FileReader();
-            reader.onload = async function(e) {
-                const typedarray = new Uint8Array(e.target.result);
+            reader.onload = async function(ev) {
                 try {
-                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    let extractedText = "";
-                    
-                    // Проходим по страницам и собираем текст
+                    const pdf = await pdfjsLib.getDocument(new Uint8Array(ev.target.result)).promise;
+                    let out = "";
                     for (let i = 1; i <= pdf.numPages; i++) {
-                        if (extractedText.length >= MAX_CHARS) break;
                         const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(" ");
-                        extractedText += pageText + "\n";
+                        const content = await page.getTextContent();
+                        out += content.items.map(item => item.str).join(" ") + "\n";
                     }
-                    
-                    finalizeFileSelection(extractedText, file.name);
-                } catch (err) {
-                    alert("Ошибка при разборе PDF файла. Возможно, он поврежден или защищен.");
-                }
+                    processText(out);
+                } catch { alert("Ошибка парсинга PDF"); }
             };
             reader.readAsArrayBuffer(file);
-            
-        } else if (fileExt === 'txt') {
-            // Логика чтения обычного TXT
+        } else if (ext === 'txt') {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                finalizeFileSelection(e.target.result, file.name);
-            };
+            reader.onload = (ev) => processText(ev.target.result);
             reader.readAsText(file);
-        } else {
-            alert("Неподдерживаемый формат файла. Пожалуйста, используйте .txt или .pdf");
         }
     });
 
-    // Функция завершения обработки текста из файла
-    function finalizeFileSelection(text, filename) {
-        if (text.length > MAX_CHARS) {
-            alert(`Файл слишком большой. Загружены только первые ${MAX_CHARS} символов.`);
-            text = text.substring(0, MAX_CHARS);
-        }
-        
-        hiddenText = text.trim();
-        if (hiddenText.length === 0) {
-            alert("Файл пуст или не содержит печатного текста (например, состоит только из картинок).");
-            clearAll();
-            return;
-        }
-
-        isFileUploaded = true;
-        textArea.value = `📄 Файл успешно загружен: ${filename}\n\n[Текст скрыт для стабильной работы браузера. Ввод заблокирован]`;
-        textArea.disabled = true;
-    }
-
     function analyzeText() {
         let text = isFileUploaded ? hiddenText : textArea.value.trim();
-        
-        if (text.length === 0) {
-            document.getElementById('result-text').innerText = "Пожалуйста, добавьте текст.";
-            document.getElementById('result-text').style.color = "#d32f2f";
-            return;
-        }
-
-        if (text.length > MAX_CHARS) text = text.substring(0, MAX_CHARS);
+        if(!text) return;
 
         if (text.length < MIN_CHARS) {
-            document.getElementById('warning-text').innerText = `⚠️ Текст слишком короткий (${text.length} симв.). Высокая вероятность ошибки!`;
+            document.getElementById('warning-text').innerText = `⚠️ Текст слишком короткий (${text.length} симв.).`;
         } else {
             document.getElementById('warning-text').innerText = "";
         }
 
-        const probability = Math.random() * 100;
-        const probFixed = probability.toFixed(1);
-        
-        document.getElementById('prob-label').innerText = `Вероятность генерации ИИ: ${probFixed}%`;
-        document.getElementById('progress-bar').style.width = `${probability}%`;
-        document.getElementById('progress-text').innerText = `${probFixed}%`;
+        const prob = Math.random() * 100;
+        const verd = prob >= 50 ? "ИИ" : "Человек";
+        const color = prob >= 50 ? "#f44336" : "#4CAF50";
 
-        const resultText = document.getElementById('result-text');
-        if (probability >= 50) {
-            resultText.innerText = `Похоже на: ИИ (${probFixed}%)`;
-            resultText.style.color = "#f44336";
-            document.getElementById('progress-bar').style.backgroundColor = "#f44336";
-        } else {
-            resultText.innerText = `Похоже на: человека (${probFixed}%)`;
-            resultText.style.color = "#4CAF50"; 
-            document.getElementById('progress-bar').style.backgroundColor = "#4CAF50";
+        document.getElementById('p-bar').style.width = `${prob}%`;
+        document.getElementById('p-bar').style.backgroundColor = color;
+        document.getElementById('p-text').innerText = `${prob.toFixed(1)}%`;
+        
+        const resEl = document.getElementById('result-text');
+        resEl.innerText = `Похоже на: ${verd} (${prob.toFixed(1)}%)`;
+        resEl.style.color = color;
+
+        lastReport = `Вердикт: ${verd}\nВероятность: ${prob.toFixed(1)}%\nТекст:\n${text}`;
+
+        // Сохранение в LocalStorage
+        const time = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        historyData.push({ time: time, length: text.length, verdict: verd, prob: prob.toFixed(1) });
+        localStorage.setItem('aiDetectorHistory', JSON.stringify(historyData));
+        
+        renderHistory();
+    }
+
+    function renderHistory() {
+        const tbody = document.getElementById('history-table-body');
+        tbody.innerHTML = "";
+        historyData.forEach(item => {
+            const row = `<tr><td>${item.time}</td><td>${item.length}</td><td>${item.verdict}</td><td>${item.prob}%</td></tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+
+    function clearHistory() {
+        if(confirm("Вы уверены, что хотите удалить всю историю?")) {
+            historyData = [];
+            localStorage.removeItem('aiDetectorHistory');
+            renderHistory();
         }
     }
-</script>
 
+    function saveReport() {
+        if(!lastReport) return;
+        const blob = new Blob([lastReport], {type: "text/plain;charset=utf-8"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Report.txt";
+        a.click();
+    }
+
+    function sortTable(colIdx) {
+        const table = document.querySelector("table tbody");
+        const rows = Array.from(table.rows);
+        const isNumeric = colIdx === 1 || colIdx === 3;
+        
+        rows.sort((a, b) => {
+            let valA = a.cells[colIdx].innerText.replace('%', '');
+            let valB = b.cells[colIdx].innerText.replace('%', '');
+            return isNumeric ? parseFloat(valA) - parseFloat(valB) : valA.localeCompare(valB);
+        });
+        
+        rows.forEach(row => table.appendChild(row));
+    }
+</script>
 </body>
 </html>
