@@ -14,7 +14,7 @@ from PySide6.QtGui import QFont, QDesktopServices
 MIN_CHARS_WARNING = 100
 MAX_FILE_CHARS = 50000
 MAX_SIZE_BYTES = 1 * 1024 * 1024 * 1024
-WEBSITE_URL = "https://artur53434.github.io/Practika/" 
+WEBSITE_URL = "index.html"
 HISTORY_FILE = "history.json" # Файл для сохранения истории
 
 try:
@@ -96,7 +96,7 @@ class AIDetectorApp(QMainWindow):
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(0, 20, 0, 20)
 
-        user_lbl = QLabel("👤 Пользователь")
+        user_lbl = QLabel("👤")
         user_lbl.setFont(QFont("Segoe UI", 16, QFont.Bold))
         user_lbl.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(user_lbl)
@@ -237,6 +237,9 @@ class AIDetectorApp(QMainWindow):
         filter_layout.addStretch()
         
         btn_export.clicked.connect(self.clear_history_data)
+
+        btn_f1.clicked.connect(self.filter_day)
+
         filter_layout.addWidget(btn_export)
         
         layout.addLayout(filter_layout)
@@ -247,6 +250,18 @@ class AIDetectorApp(QMainWindow):
         self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
         return page
+    def filter_day(self, time_str, length, verdict, prob):
+        data = []
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                try:
+                    data = json.load(f)
+                except:
+                    pass
+        data.append({"time": time_str, "length": length, "verdict": verdict, "prob": prob})
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
 
     def create_info_page(self):
         page = QWidget()
