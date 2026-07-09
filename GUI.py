@@ -10,19 +10,17 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QFont, QDesktopServices
 
-#Константы
 MIN_CHARS_WARNING = 100
 MAX_FILE_CHARS = 50000
 MAX_SIZE_BYTES = 1 * 1024 * 1024 * 1024
-WEBSITE_URL = "https://artur53434.github.io/Practika/" 
-HISTORY_FILE = "history.json" # Файл для сохранения истории
+WEBSITE_URL = "https://artur53434.github.io/Practika/" #ссылка на сайт
+HISTORY_FILE = "history.json"
 
 try:
     import pypdf
 except ImportError:
     pypdf = None
 
-#Стили(QSS)
 LIGHT_THEME = """
 QMainWindow, QWidget { background-color: #f4f5f7; color: #333333; }
 #Sidebar { background-color: #ffffff; border-right: 1px solid #d5d5d5; }
@@ -89,7 +87,7 @@ class AIDetectorApp(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        #Боковая панель
+        # 1. БОКОВАЯ ПАНЕЛЬ
         self.sidebar = QWidget()
         self.sidebar.setObjectName("Sidebar")
         self.sidebar.setFixedWidth(250)
@@ -192,22 +190,30 @@ class AIDetectorApp(QMainWindow):
         self.result_box.setObjectName("ResultBox")
         result_layout = QVBoxLayout(self.result_box)
         
-        self.prob_label = QLabel("Ожидание текста...")
-        self.prob_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        self.prob_label.setAlignment(Qt.AlignCenter)
-        
+        self.verdict_label = QLabel("Похоже больше на: ...")
+        self.verdict_label.setFont(QFont("Segoe UI", 15, QFont.Bold))
+        self.verdict_label.setStyleSheet("color: #757575;")
+        self.verdict_label.setAlignment(Qt.AlignCenter)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setAlignment(Qt.AlignCenter)
         self.progress_bar.setFormat("%p%")
+
+        self.prob_label = QLabel("Процент ИИ: 0%")
+        self.prob_label.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        self.prob_label.setStyleSheet("color: #757575;")
+        self.prob_label.setAlignment(Qt.AlignCenter)
         
         self.warning_label = QLabel("")
         self.warning_label.setStyleSheet("color: #FF9800; font-weight: bold;")
         self.warning_label.setAlignment(Qt.AlignCenter)
         
-        result_layout.addWidget(self.prob_label)
+        #иерархия элементов
+        result_layout.addWidget(self.verdict_label)
         result_layout.addWidget(self.progress_bar)
+        result_layout.addWidget(self.prob_label)
         result_layout.addWidget(self.warning_label)
         
         layout.addWidget(self.result_box)
@@ -260,12 +266,11 @@ class AIDetectorApp(QMainWindow):
         rules = (
             "AI Text Detector:\n\n"
             "1. Чистая вставка: При копировании текста (Ctrl+V) программа автоматически\n"
-            "   очищает его от лишних стилей, жирного шрифта, картинок и 'кривых' символов.\n\n"
+            "   очищает его от лишних стилей, жирного шрифта, картинок и 'кривых' symbols.\n\n"
             f"2. ⚠️ Лимиты: Не проверяйте слишком короткие тексты (менее {MIN_CHARS_WARNING} символов).\n"
             f"   Максимальный лимит для загрузки файлов: {MAX_FILE_CHARS} символов (или 1 ГБ веса).\n\n"
             "3. История: Все проверки автоматически сохраняются и остаются после закрытия программы.\n\n"
             "4. Темы: Используйте кнопку в левом нижнем углу для переключения оформления.\n\n"
-
             "Разработчики:\n" 
             "1)Пойлов В.А.\n"
             "2)Мухатаев А.В.\n"
@@ -305,8 +310,10 @@ class AIDetectorApp(QMainWindow):
         self.lbl_file_info.setText("Файл не загружен")
         self.text_area.setReadOnly(False)
         self.text_area.clear()
-        self.prob_label.setText("Ожидание текста...")
-        self.prob_label.setStyleSheet("")
+        self.verdict_label.setText("Похоже больше на: —")
+        self.verdict_label.setStyleSheet("color: #757575;")
+        self.prob_label.setText("Процент ИИ: 0%")
+        self.prob_label.setStyleSheet("color: #757575;")
         self.progress_bar.setValue(0)
         self.warning_label.setText("")
 
@@ -346,26 +353,31 @@ class AIDetectorApp(QMainWindow):
         text_length = len(target_text)
         if text_length == 0: return
         if text_length < MIN_CHARS_WARNING:
-            self.warning_label.setText(f"⚠️Текст слишком короткий ({text_length} симв.).")
+            self.warning_label.setText(f"⚠️ Текст слишком короткий ({text_length} симв.).")
         else:
             self.warning_label.setText("")
             
         ai_probability = random.uniform(0, 100)
         self.progress_bar.setValue(int(ai_probability))
+        
         verdict = "ИИ" if ai_probability >= 50.0 else "Человек"
         color = "#f44336" if ai_probability >= 50.0 else "#4CAF50"
         
-        self.prob_label.setText(f"Похоже на: {verdict} ({ai_probability:.1f}%)")
+        # Динамически выводим и вердикт над шкалой, и процент под ней
+        self.verdict_label.setText(f"Похоже больше на: {verdict}")
+        self.verdict_label.setStyleSheet(f"color: {color};")
+        
+        self.prob_label.setText(f"Процент ИИ: {ai_probability:.1f}%")
         self.prob_label.setStyleSheet(f"color: {color};")
+        
         self.progress_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
         
         time_str = datetime.datetime.now().strftime("%d.%m %H:%M:%S")
-        self.current_report_data = f"Вердикт: {verdict}\nВероятность: {ai_probability:.1f}%\nТекст:\n{target_text}"
+        self.current_report_data = f"Вердикт: {verdict}\nПроцент ИИ: {ai_probability:.1f}%\nТекст:\n{target_text}"
         
         self.add_to_history(time_str, text_length, verdict, ai_probability)
         self.save_history_to_file(time_str, text_length, verdict, ai_probability)
 
-    # Работа с историей в UI
     def add_to_history(self, time_str, length, verdict, prob):
         self.table.setSortingEnabled(False)
         row = self.table.rowCount()
@@ -383,7 +395,6 @@ class AIDetectorApp(QMainWindow):
         self.table.setItem(row, 3, item_pr)
         self.table.setSortingEnabled(True)
 
-    # Сохранение и загрузка истории из JSON
     def save_history_to_file(self, time_str, length, verdict, prob):
         data = []
         if os.path.exists(HISTORY_FILE):
