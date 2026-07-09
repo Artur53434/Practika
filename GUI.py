@@ -87,14 +87,14 @@ class AIDetectorApp(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 1. БОКОВАЯ ПАНЕЛЬ
+        #Боковая панель
         self.sidebar = QWidget()
         self.sidebar.setObjectName("Sidebar")
         self.sidebar.setFixedWidth(250)
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(0, 20, 0, 20)
 
-        user_lbl = QLabel("👤 Пользователь")
+        user_lbl = QLabel("👤")
         user_lbl.setFont(QFont("Segoe UI", 16, QFont.Bold))
         user_lbl.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(user_lbl)
