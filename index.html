@@ -6,6 +6,7 @@
     <title>Детектор текста</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
+        /* --- ПЕРЕМЕННЫЕ ЦВЕТОВ ДЛЯ ТЕМ --- */
         :root {
             --bg-color: #f4f5f7;
             --sidebar-bg: #ffffff;
@@ -75,18 +76,17 @@
         .nav-btn.active { background-color: var(--btn-active); color: var(--btn-active-text); }
         .sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
 
-        /* Основной контент */
+        /* ОСНОВНОЙ КОНТЕНТ */
         .main-content {
             flex: 1;
             padding: 40px;
             box-sizing: border-box;
             overflow-y: auto;
             display: flex;
-            justify-content: center; /* Центрируем по горизонтали */
+            justify-content: center;
             align-items: flex-start;
         }
 
-        /* Ограничиваем ширину контейнера страниц */
         .page-container {
             width: 100%;
             max-width: 850px;
@@ -108,6 +108,8 @@
         
         .file-info { font-style: italic; color: #757575; font-size: 14px; }
 
+        .action-group { display: flex; gap: 15px; }
+
         /* Поле ввода */
         textarea {
             width: 100%; height: 300px; padding: 15px; border: 1px solid var(--input-border);
@@ -122,7 +124,9 @@
             border: 1px solid var(--input-border); background-color: var(--result-bg);
             border-radius: 8px; padding: 25px; text-align: center; margin-top: 10px;
         }
-        #result-text { font-size: 22px; font-weight: bold; margin-bottom: 15px; color: #757575; }
+        
+        #verdict-text { font-size: 22px; font-weight: bold; margin-bottom: 15px; color: #757575; }
+        #result-text { font-size: 18px; font-weight: bold; margin-top: 15px; color: #757575; }
         
         .progress-container {
             width: 100%; background-color: var(--progress-bg); height: 28px;
@@ -131,22 +135,44 @@
         .progress-bar { width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.4s, background-color 0.4s; }
         .progress-text { position: absolute; width: 100%; text-align: center; top: 4px; font-weight: bold; font-size: 15px; }
 
-        #warning-text { color: #FF9800; font-weight: bold; font-size: 14px; }
+        #warning-text { color: #FF9800; font-weight: bold; font-size: 14px; margin-top: 10px; }
 
         /* Таблица истории */
-        table { width: 100%; border-collapse: collapse; background: var(--input-bg); border-radius: 8px; overflow: hidden; }
-        th, td { padding: 14px; border: 1px solid var(--table-border); text-align: left; }
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--table-border);
+        }
+        table { width: 100%; border-collapse: collapse; background: var(--input-bg); }
+        th, td { padding: 14px; border: 1px solid var(--table-border); text-align: left; white-space: nowrap; }
         th { background-color: var(--table-header); font-weight: bold; cursor: pointer; user-select: none; }
         
         .info-text { font-size: 16px; line-height: 1.7; }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            body { flex-direction: column; overflow-y: auto; height: auto; }
+            .sidebar { width: 100%; min-width: 100%; height: auto; padding: 10px; border-right: none; border-bottom: 1px solid var(--sidebar-border); flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 5px; }
+            .user-profile { display: none; }
+            .nav-btn { margin: 0; padding: 8px 12px; font-size: 13px; flex: 1 1 auto; text-align: center; }
+            .sidebar-footer { margin-top: 0; width: 100%; }
+            .main-content { padding: 15px; overflow-y: visible; }
+            textarea { height: 220px; }
+            .toolbar { flex-direction: column; align-items: stretch; width: 100%; }
+            .toolbar button { width: 100%; }
+            .file-info { text-align: center; margin: 5px 0; }
+            .action-group { flex-direction: column; gap: 5px; }
+            .btn-primary { margin-top: 5px; }
+        }
     </style>
 </head>
 <body class="dark-mode">
 
     <div class="sidebar">
         <div class="user-profile">👤 Пользователь</div>
-        <button class="nav-btn active" onclick="switchPage('page-check', this)">📝 Проверка текста</button>
-        <button class="nav-btn" onclick="switchPage('page-history', this)">🗄️ История проверок</button>
+        <button class="nav-btn active" onclick="switchPage('page-check', this)">📝 Проверка</button>
+        <button class="nav-btn" onclick="switchPage('page-history', this)">🗄️ История</button>
         <button class="nav-btn" onclick="switchPage('page-info', this)">⚙️ Инструкция</button>
         
         <div class="sidebar-footer">
@@ -162,22 +188,25 @@
                     <button class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">📄 Загрузить файлы</button>
                     <input type="file" id="file-upload" style="display:none" accept=".txt,.pdf">
                     <span class="file-info" id="file-lbl">Файл не загружен</span>
-                    <button class="btn btn-secondary" style="margin-left:auto;" onclick="clearAll()">🗑️ Очистить всё</button>
+                    <button class="btn btn-secondary" onclick="clearAll()">🗑️ Очистить всё</button>
                 </div>
                 
                 <textarea id="text-input" placeholder="Ввод текста... (Вставка Ctrl+V автоматически очищается от картинок и стилей)"></textarea>
                 
-                <div style="display: flex; gap: 15px;">
+                <div class="action-group">
                     <button class="btn btn-primary" style="flex: 2;" onclick="analyzeText()">Проверить текст</button>
                     <button class="btn btn-secondary" style="flex: 1; margin-top: 10px;" onclick="saveReport()">💾 Сохранить результат</button>
                 </div>
 
                 <div class="results-box">
-                    <div id="result-text">Ожидание текста...</div>
+                    <div id="verdict-text">Похоже больше на: ...</div>
+                    
                     <div class="progress-container">
                         <div class="progress-bar" id="p-bar"></div>
                         <div class="progress-text" id="p-text">0%</div>
                     </div>
+                    
+                    <div id="result-text">Процент ИИ: 0%</div>
                     <div id="warning-text"></div>
                 </div>
             </div>
@@ -188,20 +217,23 @@
                     <button class="btn btn-secondary">За час</button>
                     <button class="btn btn-secondary">Сегодня</button>
                     <button class="btn btn-secondary">Неделя</button>
-                    <button class="btn btn-secondary" style="margin-left: auto;" onclick="clearHistory()">🗑️ Очистить историю</button>
+                    <button class="btn btn-secondary" onclick="clearHistory()">🗑️ Очистить историю</button>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th onclick="sortTable(0)">Время</th>
-                            <th onclick="sortTable(1)">Символов</th>
-                            <th onclick="sortTable(2)">Вердикт</th>
-                            <th onclick="sortTable(3)">ИИ (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-table-body">
+                
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th onclick="sortTable(0)">Время</th>
+                                <th onclick="sortTable(1)">Символов</th>
+                                <th onclick="sortTable(2)">Вердикт</th>
+                                <th onclick="sortTable(3)">ИИ (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
                         </tbody>
-                </table>
+                    </table>
+                </div>
             </div>
 
             <div id="page-info" class="page">
@@ -226,13 +258,11 @@
     let hiddenText = "";
     let lastReport = "";
     
-    // Инициализация истории из LocalStorage
     let historyData = JSON.parse(localStorage.getItem('aiDetectorHistory')) || [];
 
     const textArea = document.getElementById('text-input');
     const fileUpload = document.getElementById('file-upload');
 
-    // Отрисовка истории при загрузке
     document.addEventListener("DOMContentLoaded", renderHistory);
 
     function switchPage(pageId, btn) {
@@ -240,6 +270,10 @@
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(pageId).classList.add('active');
         btn.classList.add('active');
+        
+        if(window.innerWidth <= 768) {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
     }
 
     function toggleTheme() {
@@ -261,8 +295,13 @@
         fileUpload.value = "";
         document.getElementById('file-lbl').innerText = "Файл не загружен";
         textArea.value = ""; textArea.disabled = false;
-        document.getElementById('result-text').innerText = "Ожидание текста...";
+        
+        document.getElementById('verdict-text').innerText = "Похоже больше на: —";
+        document.getElementById('verdict-text').style.color = "var(--text-color)";
+        
+        document.getElementById('result-text').innerText = "Процент ИИ: 0%";
         document.getElementById('result-text').style.color = "var(--text-color)";
+        
         document.getElementById('p-bar').style.width = "0%";
         document.getElementById('p-text').innerText = "0%";
         document.getElementById('warning-text').innerText = "";
@@ -315,22 +354,30 @@
         }
 
         const prob = Math.random() * 100;
-        const verd = prob >= 50 ? "ИИ" : "Человек";
         const color = prob >= 50 ? "#f44336" : "#4CAF50";
+        
+        // Корректно склоняем слова на веб-странице
+        const verdictText = prob >= 50 ? "Похоже больше на ИИ" : "Похоже больше на Человека";
+        const historyVerdict = prob >= 50 ? "ИИ" : "Человек";
 
         document.getElementById('p-bar').style.width = `${prob}%`;
         document.getElementById('p-bar').style.backgroundColor = color;
         document.getElementById('p-text').innerText = `${prob.toFixed(1)}%`;
         
+        // Текст вердикта НАД шкалой
+        const verdEl = document.getElementById('verdict-text');
+        verdEl.innerText = verdictText;
+        verdEl.style.color = color;
+
+        // Процент ПОД шкалой
         const resEl = document.getElementById('result-text');
-        resEl.innerText = `Похоже на: ${verd} (${prob.toFixed(1)}%)`;
+        resEl.innerText = `Процент ИИ: ${prob.toFixed(1)}%`;
         resEl.style.color = color;
 
-        lastReport = `Вердикт: ${verd}\nВероятность: ${prob.toFixed(1)}%\nТекст:\n${text}`;
+        lastReport = `${verdictText}\nПроцент ИИ: ${prob.toFixed(1)}%\nТекст:\n${text}`;
 
-        // Сохранение в LocalStorage
         const time = new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        historyData.push({ time: time, length: text.length, verdict: verd, prob: prob.toFixed(1) });
+        historyData.push({ time: time, length: text.length, verdict: historyVerdict, prob: prob.toFixed(1) });
         localStorage.setItem('aiDetectorHistory', JSON.stringify(historyData));
         
         renderHistory();
