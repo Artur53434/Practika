@@ -6,7 +6,6 @@
     <title>Детектор текста</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
-        /* --- ПЕРЕМЕННЫЕ ЦВЕТОВ ДЛЯ ТЕМ --- */
         :root {
             --bg-color: #f4f5f7;
             --sidebar-bg: #ffffff;
@@ -76,7 +75,6 @@
         .nav-btn.active { background-color: var(--btn-active); color: var(--btn-active-text); }
         .sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 5px; }
 
-        /* ОСНОВНОЙ КОНТЕНТ */
         .main-content {
             flex: 1;
             padding: 40px;
@@ -170,7 +168,7 @@
 <body class="dark-mode">
 
     <div class="sidebar">
-        <div class="user-profile">👤 Пользователь</div>
+        <div class="user-profile">👤</div>
         <button class="nav-btn active" onclick="switchPage('page-check', this)">📝 Проверка</button>
         <button class="nav-btn" onclick="switchPage('page-history', this)">🗄️ История</button>
         <button class="nav-btn" onclick="switchPage('page-info', this)">⚙️ Инструкция</button>
@@ -356,7 +354,6 @@
         const prob = Math.random() * 100;
         const color = prob >= 50 ? "#f44336" : "#4CAF50";
         
-        // Корректно склоняем слова на веб-странице
         const verdictText = prob >= 50 ? "Похоже больше на ИИ" : "Похоже больше на Человека";
         const historyVerdict = prob >= 50 ? "ИИ" : "Человек";
 
@@ -364,12 +361,10 @@
         document.getElementById('p-bar').style.backgroundColor = color;
         document.getElementById('p-text').innerText = `${prob.toFixed(1)}%`;
         
-        // Текст вердикта НАД шкалой
         const verdEl = document.getElementById('verdict-text');
         verdEl.innerText = verdictText;
         verdEl.style.color = color;
 
-        // Процент ПОД шкалой
         const resEl = document.getElementById('result-text');
         resEl.innerText = `Процент ИИ: ${prob.toFixed(1)}%`;
         resEl.style.color = color;
