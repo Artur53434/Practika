@@ -1,146 +1,211 @@
 """
-Детектор ИИ-текста на базе энкодера BAAI/bge-m3.
-Поддерживает бинарную классификацию и атрибуцию.
-Кэширует эмбеддинги для повторяющихся текстов.
+Детектор ИИ-текста — прослойка между обученной моделью и GUI/сайтом.
+Пайплайн ДОЛЖЕН точно совпадать с train_model.py.
 """
 import os
+import re
 import gc
 import numpy as np
 import joblib
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 
+# =============================================================================
+# КОНСТАНТЫ — ДОЛЖНЫ СОВПАДАТЬ С train_model.py
+# =============================================================================
 MODEL_NAME = "BAAI/bge-m3"
 LOCAL_PATH = "bge_m3_local"
-MAX_LENGTH = 512
+MAX_LENGTH = 1024
+POOLING = "cls"
+PERPLEXITY_MODEL_NAME = "gpt2"
+PERPLEXITY_LOCAL_PATH = "gpt2_local"
+PERPLEXITY_MAX_LENGTH = 256
+MATTR_WINDOW = 100
 
-def load_encoder(local_path, model_name):
-    """Загружает bge-m3 локально или скачивает, если папки нет."""
-    path_to_load = local_path if os.path.exists(local_path) else model_name
-    
-    tokenizer = AutoTokenizer.from_pretrained(path_to_load)
-    model = AutoModel.from_pretrained(
-        path_to_load,
-        torch_dtype=torch.float16,
-        low_cpu_mem_usage=True
-    )
-    
+
+# =============================================================================
+# ВЫБОР УСТРОЙСТВА
+# =============================================================================
+def _pick_device_dtype():
     if torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-        
+        return torch.device("mps"), torch.float16
+    if torch.cuda.is_available():
+        return torch.device("cuda"), torch.float16
+    return torch.device("cpu"), torch.float32
+
+
+# =============================================================================
+# ЗАГРУЗКА МОДЕЛЕЙ
+# =============================================================================
+def load_encoder(local_path: str = LOCAL_PATH, model_name: str = MODEL_NAME):
+    path_to_load = local_path if os.path.exists(local_path) else model_name
+    tokenizer = AutoTokenizer.from_pretrained(path_to_load)
+    device, dtype = _pick_device_dtype()
+    model = AutoModel.from_pretrained(
+        path_to_load, torch_dtype=dtype, low_cpu_mem_usage=True
+    )
     model = model.to(device)
     model.eval()
     return tokenizer, model, device
 
 
-class AIDetector:
-    """
-    Детектор ИИ-текста.
-    - predict_proba / predict — бинарная классификация (человек/ИИ)
-    - predict_closest_model — атрибуция
-    """
+def load_perplexity_model(local_path: str = PERPLEXITY_LOCAL_PATH,
+                          model_name: str = PERPLEXITY_MODEL_NAME):
+    path_to_load = local_path if os.path.exists(local_path) else model_name
+    tokenizer = AutoTokenizer.from_pretrained(path_to_load)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    device, dtype = _pick_device_dtype()
+    model = AutoModelForCausalLM.from_pretrained(
+        path_to_load, torch_dtype=dtype, low_cpu_mem_usage=True
+    )
+    model = model.to(device)
+    model.eval()
+    return tokenizer, model, device
 
+
+# =============================================================================
+# СТИЛОМЕТРИЯ (точная копия логики из train_model.py)
+# =============================================================================
+def compute_stylometric_single(text: str, mattr_window: int = MATTR_WINDOW) -> np.ndarray:
+    words = re.findall(r"\b\w+\b", text.lower())
+    num_words = len(words)
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    sentences = [s for s in sentences if s]
+    sent_lengths = [len(re.findall(r"\b\w+\b", s)) for s in sentences]
+    sent_len_var = float(np.var(sent_lengths)) if sent_lengths else 0.0
+
+    if num_words >= mattr_window:
+        ttrs = []
+        for start in range(num_words - mattr_window + 1):
+            window = words[start:start + mattr_window]
+            ttrs.append(len(set(window)) / mattr_window)
+        mattr = float(np.mean(ttrs))
+    elif num_words > 0:
+        mattr = len(set(words)) / num_words
+    else:
+        mattr = 0.0
+
+    if num_words > 1:
+        bigrams = [tuple(words[i:i + 2]) for i in range(num_words - 1)]
+        rep_ngram_ratio = 1.0 - (len(set(bigrams)) / len(bigrams))
+    else:
+        rep_ngram_ratio = 0.0
+
+    punct_count = len(re.findall(r"[^\w\s]", text))
+    punct_ratio = punct_count / len(text) if len(text) > 0 else 0.0
+    avg_word_len = float(np.mean([len(w) for w in words])) if num_words > 0 else 0.0
+
+    return np.array(
+        [[sent_len_var, mattr, rep_ngram_ratio, punct_ratio, avg_word_len]],
+        dtype=np.float32,
+    )
+
+
+# =============================================================================
+# ДЕТЕКТОР
+# =============================================================================
+class AIDetector:
     def __init__(
         self,
         model_path: str = LOCAL_PATH,
         classifier_path: str = "classifier.joblib",
-        attribution_classifier_path: str = None,
-        attribution_labels_path: str = None,
-        max_length: int = MAX_LENGTH,
-        threshold: float = 0.5,
-        cache_size: int = 128,
+        threshold: float = None,
+        cache_size: int = 64,
     ):
-        self.max_length = max_length
-        self.threshold = threshold
         self.cache_size = cache_size
-        self._embedding_cache = {}
-
-        # Загружаем bge-m3
-        self.tokenizer, self.model, self.device = load_encoder(model_path, MODEL_NAME)
-
-        # Бинарный классификатор (XGBoost)
+        self._feature_cache = {}
         if not os.path.exists(classifier_path):
-            raise FileNotFoundError(f"Файл классификатора {classifier_path} не найден. Сначала запустите train_model.py")
-        self.classifier = joblib.load(classifier_path)
+            raise FileNotFoundError(
+                f"Файл классификатора {classifier_path} не найден. "
+                f"Сначала запустите train_model.py"
+            )
+        bundle = joblib.load(classifier_path)
+        self.model = bundle["model"]
+        self.calibrator = bundle.get("calibrator")
+        self.use_stylometric = bundle.get("use_stylometric", True)
+        self.threshold = threshold if threshold is not None else bundle.get("threshold", 0.5)
 
-        # Опциональный классификатор атрибуции
-        self.attribution_classifier = None
-        self.attribution_labels = None
-        if attribution_classifier_path and os.path.exists(attribution_classifier_path):
-            self.attribution_classifier = joblib.load(attribution_classifier_path)
-            if attribution_labels_path and os.path.exists(attribution_labels_path):
-                self.attribution_labels = joblib.load(attribution_labels_path)
+        self.tokenizer, self.encoder, self.device = load_encoder(model_path, MODEL_NAME)
 
-        status = " | атрибуция включена" if self.attribution_classifier is not None else ""
-        print(f"Детектор готов | устройство: {self.device}{status}")
+        self.ppl_tokenizer = self.ppl_model = self.ppl_device = None
+        if self.use_stylometric:
+            self.ppl_tokenizer, self.ppl_model, self.ppl_device = load_perplexity_model()
 
-    def _get_embedding(self, text: str) -> np.ndarray:
-        """Получение эмбеддинга с кэшированием (CLS + L2-нормализация)."""
-        if text in self._embedding_cache:
-            return self._embedding_cache[text]
+        status = "стилометрия+перплексити включены" if self.use_stylometric else "только эмбеддинги"
+        print(f"Детектор готов | устройство: {self.device} | {status} | порог: {self.threshold:.3f}")
 
-        # Токенизация
+    # -------------------------------------------------------------------
+    def _embed(self, text: str) -> np.ndarray:
         encoded = self.tokenizer(
-            text,
-            truncation=True,
-            padding='max_length',
-            max_length=self.max_length,
-            return_tensors='pt'
+            text, truncation=True, max_length=MAX_LENGTH, return_tensors="pt"
         )
-        
-        input_ids = encoded['input_ids'].to(self.device)
-        attention_mask = encoded['attention_mask'].to(self.device)
-
-        # Генерация эмбеддинга
-        with torch.no_grad():
-            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            # CLS-пулинг (берем первый токен)
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
+        with torch.inference_mode():
+            outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
             emb = outputs.last_hidden_state[:, 0]
-            # L2-нормализация
             emb = F.normalize(emb, p=2, dim=1)
-            emb_np = emb.cpu().numpy()
+        return emb.detach().cpu().float().numpy()
 
-        # Кэширование
-        if len(self._embedding_cache) >= self.cache_size:
-            self._embedding_cache.pop(next(iter(self._embedding_cache)))
-        self._embedding_cache[text] = emb_np
-        
-        return emb_np
+    def _perplexity(self, text: str) -> np.ndarray:
+        encoded = self.ppl_tokenizer(
+            text, truncation=True, max_length=PERPLEXITY_MAX_LENGTH, return_tensors="pt"
+        )
+        input_ids = encoded["input_ids"].to(self.ppl_device)
+        attention_mask = encoded["attention_mask"].to(self.ppl_device)
+        if input_ids.size(1) < 2:
+            return np.zeros((1, 1), dtype=np.float32)
+        with torch.inference_mode():
+            outputs = self.ppl_model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits[:, :-1, :].contiguous()
+            labels = input_ids[:, 1:].contiguous()
+            mask = attention_mask[:, 1:].contiguous()
+            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            token_losses = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+            token_losses = token_losses.view(labels.size())
+            seq_loss = (token_losses * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+        return seq_loss.detach().cpu().float().numpy().reshape(1, 1)
 
+    def _build_features(self, text: str) -> np.ndarray:
+        emb = self._embed(text)
+        if not self.use_stylometric:
+            return emb
+        ppl = self._perplexity(text)
+        stylo = compute_stylometric_single(text)
+        # Порядок важен: embeddings, perplexity, stylometric
+        return np.hstack([emb, ppl, stylo])
+
+    def _get_features_cached(self, text: str) -> np.ndarray:
+        if text in self._feature_cache:
+            return self._feature_cache[text]
+        X = self._build_features(text)
+        if len(self._feature_cache) >= self.cache_size:
+            self._feature_cache.pop(next(iter(self._feature_cache)))
+        self._feature_cache[text] = X
+        return X
+
+    # -------------------------------------------------------------------
     def predict_proba(self, text: str) -> float:
-        """Вероятность ИИ (0..1)."""
-        emb = self._get_embedding(text)
-        prob = self.classifier.predict_proba(emb)[0, 1]
-        return float(prob)
+        X = self._get_features_cached(text)
+        raw_proba = self.model.predict_proba(X)[0, 1]
+        if self.calibrator is not None:
+            raw_proba = float(self.calibrator.predict([raw_proba])[0])
+        return float(raw_proba)
 
     def predict(self, text: str, threshold: float = None) -> int:
-        """Бинарная метка: 0 — человек, 1 — ИИ."""
         if threshold is None:
             threshold = self.threshold
         return 1 if self.predict_proba(text) >= threshold else 0
 
-    def predict_closest_model(self, text: str) -> dict:
-        """
-        Возвращает вероятности для каждого класса (human + модели) в порядке убывания.
-        """
-        if self.attribution_classifier is None or self.attribution_labels is None:
-            raise RuntimeError(
-                "Классификатор атрибуции не загружен. Передайте "
-                "attribution_classifier_path и attribution_labels_path в конструктор."
-            )
-        emb = self._get_embedding(text)
-        probs = self.attribution_classifier.predict_proba(emb)[0]
-        labels = self.attribution_labels.classes_
-        ranked = sorted(zip(labels, probs), key=lambda x: x[1], reverse=True)
-        return {label: float(p) for label, p in ranked}
-
     def __del__(self):
-        """Освобождение ресурсов."""
-        if hasattr(self, 'model'):
-            del self.model
+        for attr in ("encoder", "ppl_model"):
+            if hasattr(self, attr):
+                try:
+                    delattr(self, attr)
+                except Exception:
+                    pass
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
         gc.collect()
